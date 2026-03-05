@@ -38,19 +38,22 @@ struct {
     __uint(max_entries, 2 << 16);       // 2*64 = 128 KB
 } ring_buffer SEC(".maps");
 
+// Helper function to fill in the necessary details for every event
+static __always_inline void init_event(struct event *e, __u8 type) {
+    __u64 ids = bpf_get_current_pid_tgid();
+    e->pid = ids >> 32;
+    e->tgid = (__u32)ids;
+    e->type = type;
+    e->timestamp = bpf_ktime_get_ns();
+    bpf_get_current_comm(&e->command, sizeof(ring_buffer));
+}
 
 SEC("tp/syscalls/sys_enter_openat")
 int record_open(struct trace_event_raw_sys_enter *ctx) {
     struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(ring_buffer), 0);
     if (!e) return 0;
 
-    __u64 ids = bpf_get_current_pid_tgid();
-    e->pid = ids >> 32;
-    e->tgid = (__u32)ids;
-    e->type = EVENT_OPEN;
-    e->timestamp = bpf_ktime_get_ns();
-
-    bpf_get_current_comm(&e->command, sizeof(ring_buffer));
+    init_event(e, EVENT_OPEN);
 
     const char *filename = (const char*)&ctx->args[1];
     bpf_probe_read_user_str(e->fname, sizeof(e->fname), filename);
@@ -65,11 +68,7 @@ int record_connect(struct trace_event_raw_sys_enter *ctx) {
     struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(ring_buffer), 0);
     if (!e) return 0;
 
-    __u64 ids = bpf_get_current_pid_tgid();
-    e->pid = ids >> 32;
-    e->tgid = (__u32)ids;
-    e->type = EVENT_CONNECT;
-    e->timestamp = bpf_ktime_get_ns();
+    init_event(e, EVENT_CONNECT);
 
     struct sockaddr *addr = (struct sockaddr*)ctx->args[1];
     struct sockaddr sa = {};
