@@ -94,4 +94,29 @@ int record_connect(struct trace_event_raw_sys_enter *ctx) {
     return 0;
 }
 
+int record_exec(struct trace_event_raw_sys_enter *ctx) {
+    struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(ring_buffer), 0);
+    if (!e) return 0;
+
+    init_event(e, EVENT_EXEC);
+
+    struct task_struct *task = (struct task_struct*)bpf_get_current_task();
+
+    struct task_struct *parent = NULL;
+    BPF_CORE_READ_INTO(&parent, task, real_parent);
+    if (parent) {
+        BPF_CORE_READ_INTO(&e->parent, parent, tgid);
+        BPF_CORE_READ_STR_INTO(&e->p_command, parent, comm);
+
+        struct task_struct *gparent = NULL;
+        BPF_CORE_READ_INTO(&gparent, parent, real_parent);
+        if (gparent) {
+            BPF_CORE_READ_INTO(&e->grant_parent, gparent, tgid);
+            BPF_CORE_READ_STR_INTO(&e->gp_command, gparent, comm);
+        }
+    }
+
+    return 0;
+}
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
