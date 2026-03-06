@@ -50,7 +50,7 @@ static __always_inline void init_event(struct event *e, __u8 type) {
 
 SEC("tp/syscalls/sys_enter_openat")
 int record_open(struct trace_event_raw_sys_enter *ctx) {
-    struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(ring_buffer), 0);
+    struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(struct event), 0);
     if (!e) return 0;
 
     init_event(e, EVENT_OPEN);
@@ -65,7 +65,7 @@ int record_open(struct trace_event_raw_sys_enter *ctx) {
 
 SEC("tp/syscalls/sys_enter_connect")
 int record_connect(struct trace_event_raw_sys_enter *ctx) {
-    struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(ring_buffer), 0);
+    struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(struct event), 0);
     if (!e) return 0;
 
     init_event(e, EVENT_CONNECT);
@@ -94,8 +94,9 @@ int record_connect(struct trace_event_raw_sys_enter *ctx) {
     return 0;
 }
 
+SEC("tp/syscalls/sys_enter_execve")
 int record_exec(struct trace_event_raw_sys_enter *ctx) {
-    struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(ring_buffer), 0);
+    struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(struct event), 0);
     if (!e) return 0;
 
     init_event(e, EVENT_EXEC);
@@ -116,6 +117,7 @@ int record_exec(struct trace_event_raw_sys_enter *ctx) {
         }
     }
 
+    bpf_ringbuf_submit(e,0);
     return 0;
 }
 

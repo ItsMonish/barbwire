@@ -1,11 +1,83 @@
 package main
 
 import (
-	"unsafe"
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/ItsMonish/barbwire/internal/correlator"
+	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/ringbuf"
+	"github.com/cilium/ebpf/rlimit"
 )
 
+//go:generate go tool bpf2go -tags linux correlator c/correlator.bpf.c
+
 func main() {
-	println(unsafe.Sizeof(correlator.Event{}))
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	if err := rlimit.RemoveMemlock(); err != nil {
+		log.Fatalf("Error removing memlock: %v", err)
+	}
+
+	objs := correlatorObjects{}
+	if err := loadCorrelatorObjects(&objs, nil); err != nil {
+		log.Fatalf("Error in loading eBPF objects: %v", err)
+	}
+	defer objs.Close()
+
+	tpOpen, err := link.Tracepoint("syscalls", "sys_enter_openat", objs.RecordOpen, nil)
+	if err != nil {
+		log.Fatalf("Error attaching to open: %v", err)
+	}
+	defer tpOpen.Close()
+
+	tpConnect, err := link.Tracepoint("syscalls", "sys_enter_connect", objs.RecordConnect, nil)
+	if err != nil {
+		log.Fatalf("Error attaching to connect: %v", err)
+	}
+	defer tpConnect.Close()
+
+	tpExec, err := link.Tracepoint("syscalls", "sys_enter_execve", objs.RecordExec, nil)
+	if err != nil {
+		log.Fatalf("Error attaching to exec: %v", err)
+	}
+	tpExec.Close()
+
+	rbReader, err := ringbuf.NewReader(objs.RingBuffer)
+	if err != nil {
+		log.Fatalf("Error opening ring buffer: %v", err)
+	}
+	defer rbReader.Close()
+
+	log.Println("Barbwire running... Press Ctrl+C to exit")
+
+	go func() {
+		<-stop
+		rbReader.Close()
+	}()
+
+	for {
+		record, err := rbReader.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				log.Println("Ring buffer closed. Shutting down...")
+				return
+			}
+			log.Printf("Error reading from ring buffer: %v", err)
+			continue
+		}
+
+		var ev correlator.Event
+		err = binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &ev)
+		if err != nil {
+			log.Printf("Error parsing ring buffer record: %v", err)
+			continue
+		}
+	}
 }
