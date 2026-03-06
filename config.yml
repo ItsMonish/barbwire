@@ -1,0 +1,2 @@
+# The time difference between calls to consider for correlation in seconds
+window_duration: 5

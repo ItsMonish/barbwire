@@ -15,11 +15,17 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go tool bpf2go -tags linux correlator c/correlator.bpf.c
+//go:generate go tool bpf2go -tags linux -cflags "-Wno-missing-declarations" correlator c/correlator.bpf.c
 
 func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	conf, err := LoadConfig("config.yml")
+	if err != nil {
+		log.Fatalf("Error loading config: %v", err)
+	}
+	_ = conf.CorrelationWindowSeconds
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatalf("Error removing memlock: %v", err)
