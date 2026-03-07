@@ -52,6 +52,7 @@ SEC("tp/syscalls/sys_enter_openat")
 int record_open(struct trace_event_raw_sys_enter *ctx) {
     struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(struct event), 0);
     if (!e) return 0;
+    __builtin_memset(e, 0, sizeof(struct event));
 
     init_event(e, EVENT_OPEN);
 
@@ -67,6 +68,7 @@ SEC("tp/syscalls/sys_enter_connect")
 int record_connect(struct trace_event_raw_sys_enter *ctx) {
     struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(struct event), 0);
     if (!e) return 0;
+    __builtin_memset(e, 0, sizeof(struct event));
 
     init_event(e, EVENT_CONNECT);
 
@@ -98,6 +100,7 @@ SEC("tp/syscalls/sys_enter_execve")
 int record_exec(struct trace_event_raw_sys_enter *ctx) {
     struct event *e = bpf_ringbuf_reserve(&ring_buffer, sizeof(struct event), 0);
     if (!e) return 0;
+    __builtin_memset(e, 0, sizeof(struct event));
 
     init_event(e, EVENT_EXEC);
 
