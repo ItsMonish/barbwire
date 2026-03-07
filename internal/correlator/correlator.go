@@ -21,6 +21,7 @@ type Correlator struct {
 	window      time.Duration
 	scorer      *scoring.Scorer
 	threshold   int
+	seen        map[types.SeenKey]time.Time
 }
 
 func NewCorrelator(conf *config.Config) *Correlator {
@@ -31,6 +32,7 @@ func NewCorrelator(conf *config.Config) *Correlator {
 		window:      time.Duration(conf.CorrelationWindowSeconds) * time.Second,
 		scorer:      s,
 		threshold:   conf.AlertThreshold,
+		seen:        make(map[types.SeenKey]time.Time),
 	}
 
 	go c.cleanUp()
@@ -113,6 +115,15 @@ func (c *Correlator) handleConnect(ev types.Event) {
 
 	command := trimNull(ev.Command[:])
 	addr, port := resolvPort(ev)
+	key := types.SeenKey{Pid: ev.Pid, Addr: addr, Port: port}
+
+	c.mu.Lock()
+	if last, ok := c.seen[key]; ok && now.Sub(last) < c.window {
+		c.mu.Unlock()
+		return
+	}
+	c.seen[key] = now
+	c.mu.Unlock()
 
 	fmt.Printf("\n┌─ barbwire alert — PID %-6d ─────────────\n", ev.Pid)
 	fmt.Printf("│  command  : %s\n", command)
@@ -146,6 +157,12 @@ func (c *Correlator) cleanUp() {
 				c.recentOpens[pid] = freshEntries
 			} else {
 				delete(c.recentOpens, pid)
+			}
+
+			for key, t := range c.seen {
+				if now.Sub(t) > c.window {
+					delete(c.seen, key)
+				}
 			}
 		}
 

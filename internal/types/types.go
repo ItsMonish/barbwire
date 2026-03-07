@@ -48,3 +48,9 @@ type LineageEntry struct {
 	ParentComm  string
 	GparentComm string
 }
+
+type SeenKey struct {
+	Pid  int32
+	Addr string
+	Port uint16
+}
