@@ -7,12 +7,13 @@ import (
 )
 
 type Config struct {
-	CorrelationWindowSeconds int               `yaml:"window_duration"`
-	SuspiciousFiles          []FilePair        `yaml:"suspicious_files"`
-	SuspiciousParents        []LineageModifier `yaml:"suspicious_parents"`
-	LegitParents             []LineageModifier `yaml:"legit_parents"`
-	SeverityThresholds       SeverityThreshold `yaml:"severity_thresholds"`
-	AlertThreshold           int               `yaml:"alert_threshold"`
+	CorrelationWindowSeconds int                 `yaml:"window_duration"`
+	SuspiciousFiles          []FilePair          `yaml:"suspicious_files"`
+	SuspiciousParents        []LineageModifier   `yaml:"suspicious_parents"`
+	LegitParents             []LineageModifier   `yaml:"legit_parents"`
+	SeverityThresholds       SeverityThreshold   `yaml:"severity_thresholds"`
+	AlertThreshold           int                 `yaml:"alert_threshold"`
+	IgnoredDestinations      IgnoredDestinations `yaml:"whitelist"`
 }
 
 type FilePair struct {
@@ -29,6 +30,11 @@ type LineageModifier struct {
 type SeverityThreshold struct {
 	Medium int `yaml:"medium"`
 	High   int `yaml:"high"`
+}
+
+type IgnoredDestinations struct {
+	Ports []int    `yaml:"ports"`
+	IPs   []string `yaml:"ips"`
 }
 
 func LoadConfig(path string) (*Config, error) {

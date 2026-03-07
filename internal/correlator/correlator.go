@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/bits"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ type Correlator struct {
 	scorer      *scoring.Scorer
 	threshold   int
 	seen        map[types.SeenKey]time.Time
+	whitelist   config.IgnoredDestinations
 }
 
 func NewCorrelator(conf *config.Config) *Correlator {
@@ -33,6 +35,7 @@ func NewCorrelator(conf *config.Config) *Correlator {
 		scorer:      s,
 		threshold:   conf.AlertThreshold,
 		seen:        make(map[types.SeenKey]time.Time),
+		whitelist:   conf.IgnoredDestinations,
 	}
 
 	go c.cleanUp()
@@ -108,13 +111,22 @@ func (c *Correlator) handleConnect(ev types.Event) {
 		}
 	}
 
-	// nothing scored or below threshold
 	if bestOpen == nil || bestResult.Score < c.threshold {
 		return
 	}
 
 	command := trimNull(ev.Command[:])
 	addr, port := resolvPort(ev)
+
+	for _, p := range c.whitelist.Ports {
+		if port == uint16(p) {
+			return
+		}
+	}
+	if slices.Contains(c.whitelist.IPs, addr) {
+		return
+	}
+
 	key := types.SeenKey{Pid: ev.Pid, Addr: addr, Port: port}
 
 	c.mu.Lock()

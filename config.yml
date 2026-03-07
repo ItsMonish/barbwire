@@ -65,6 +65,15 @@ legit_parents:
   - program: "dockerd"
     modifier: -2
 
+whitelist:
+  ips:
+    - "8.8.8.8"
+    - "8.8.4.4"
+    - "1.1.1.1"
+    - "1.0.0.1"
+  ports:
+    - 53
+
 severity_thresholds:
   medium: 3
   high: 5
