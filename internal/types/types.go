@@ -1,7 +1,6 @@
-package correlator
+package types
 
 import (
-	"sync"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -39,20 +38,13 @@ type Event struct {
 }
 
 type OpenEntry struct {
-	timestamp time.Time
-	fname     string
+	Timestamp time.Time
+	Fname     string
 }
 
 type LineageEntry struct {
-	ppid        int32
-	gppid       int32
-	parentComm  string
-	gparentComm string
-}
-
-type Correlator struct {
-	mu          sync.Mutex
-	recentOpens map[int32][]OpenEntry
-	lineage     map[int32]LineageEntry
-	window      time.Duration
+	Ppid        int32
+	Gppid       int32
+	ParentComm  string
+	GparentComm string
 }

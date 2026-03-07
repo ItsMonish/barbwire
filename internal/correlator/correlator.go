@@ -5,15 +5,24 @@ import (
 	"fmt"
 	"math/bits"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/ItsMonish/barbwire/internal/config"
+	"github.com/ItsMonish/barbwire/internal/types"
 )
+
+type Correlator struct {
+	mu          sync.Mutex
+	recentOpens map[int32][]types.OpenEntry
+	lineage     map[int32]types.LineageEntry
+	window      time.Duration
+}
 
 func NewCorrelator(conf *config.Config) *Correlator {
 	c := &Correlator{
-		recentOpens: make(map[int32][]OpenEntry),
-		lineage:     make(map[int32]LineageEntry),
+		recentOpens: make(map[int32][]types.OpenEntry),
+		lineage:     make(map[int32]types.LineageEntry),
 		window:      time.Duration(conf.CorrelationWindowSeconds) * time.Second,
 	}
 
@@ -21,43 +30,43 @@ func NewCorrelator(conf *config.Config) *Correlator {
 	return c
 }
 
-func (c *Correlator) HandleEvent(ev Event) {
+func (c *Correlator) HandleEvent(ev types.Event) {
 	switch ev.Type {
-	case EventOpen:
+	case types.EventOpen:
 		c.handleOpen(ev)
-	case EventConnect:
+	case types.EventConnect:
 		c.handleConnect(ev)
-	case EventExec:
+	case types.EventExec:
 		c.handleExec(ev)
 	}
 }
 
-func (c *Correlator) handleOpen(ev Event) {
+func (c *Correlator) handleOpen(ev types.Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	entry := OpenEntry{
-		timestamp: time.Now(),
-		fname:     trimNull(ev.Fname[:]),
+	entry := types.OpenEntry{
+		Timestamp: time.Now(),
+		Fname:     trimNull(ev.Fname[:]),
 	}
 
 	c.recentOpens[ev.Pid] = append(c.recentOpens[ev.Pid], entry)
 }
 
-func (c *Correlator) handleExec(ev Event) {
+func (c *Correlator) handleExec(ev types.Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.lineage[ev.Pid] = LineageEntry{
-		ppid:        ev.Ppid,
-		gppid:       ev.Gppid,
-		parentComm:  trimNull(ev.ParentCommand[:]),
-		gparentComm: trimNull(ev.GParentCommand[:]),
+	c.lineage[ev.Pid] = types.LineageEntry{
+		Ppid:        ev.Ppid,
+		Gppid:       ev.Gppid,
+		ParentComm:  trimNull(ev.ParentCommand[:]),
+		GparentComm: trimNull(ev.GParentCommand[:]),
 	}
 }
 
-func (c *Correlator) handleConnect(ev Event) {
-	if ev.ConFamily != AF_INET && ev.ConFamily != AF_INET6 {
+func (c *Correlator) handleConnect(ev types.Event) {
+	if ev.ConFamily != types.AF_INET && ev.ConFamily != types.AF_INET6 {
 		return
 	}
 
@@ -72,7 +81,7 @@ func (c *Correlator) handleConnect(ev Event) {
 
 	now := time.Now()
 	for _, open := range opens {
-		if now.Sub(open.timestamp) < c.window {
+		if now.Sub(open.Timestamp) < c.window {
 			continue
 		}
 
@@ -81,12 +90,12 @@ func (c *Correlator) handleConnect(ev Event) {
 
 		fmt.Printf("\n┌─ barbwire alert — PID %-6d ─────────────\n", ev.Pid)
 		fmt.Printf("│  command  : %s\n", command)
-		fmt.Printf("│  file     : %s\n", open.fname)
+		fmt.Printf("│  file     : %s\n", open.Fname)
 		fmt.Printf("│  connect  : %s:%d\n", addr, port)
 
 		if hasLineage {
-			fmt.Printf("│  parent   : %s (pid %d)\n", lineage.parentComm, lineage.ppid)
-			fmt.Printf("│  gparent  : %s (pid %d)\n", lineage.gparentComm, lineage.gppid)
+			fmt.Printf("│  parent   : %s (pid %d)\n", lineage.ParentComm, lineage.Ppid)
+			fmt.Printf("│  gparent  : %s (pid %d)\n", lineage.GparentComm, lineage.Gppid)
 		}
 
 		fmt.Println("└─────────────────────────────────────────────")
@@ -102,9 +111,9 @@ func (c *Correlator) cleanUp() {
 		now := time.Now()
 
 		for pid, opens := range c.recentOpens {
-			var freshEntries []OpenEntry
+			var freshEntries []types.OpenEntry
 			for _, open := range opens {
-				if now.Sub(open.timestamp) <= c.window {
+				if now.Sub(open.Timestamp) <= c.window {
 					freshEntries = append(freshEntries, open)
 				}
 			}
@@ -119,13 +128,13 @@ func (c *Correlator) cleanUp() {
 	}
 }
 
-func resolvPort(ev Event) (string, uint16) {
+func resolvPort(ev types.Event) (string, uint16) {
 	port := ntohs(ev.ConPort)
 
 	switch ev.ConFamily {
-	case AF_INET:
+	case types.AF_INET:
 		return net.IP(ev.Ipv4Addr[:]).String(), port
-	case AF_INET6:
+	case types.AF_INET6:
 		return net.IP(ev.Ipv6Addr[:]).String(), port
 	}
 
