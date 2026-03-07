@@ -7,7 +7,27 @@ import (
 )
 
 type Config struct {
-	CorrelationWindowSeconds int `yaml:"correlation_window_seconds"`
+	CorrelationWindowSeconds int               `yaml:"window_duration"`
+	SuspiciousFiles          []FilePair        `yaml:"suspicious_files"`
+	SuspiciousParents        []LineageModifier `yaml:"suspicious_parents"`
+	LegitParents             []LineageModifier `yaml:"legit_parents"`
+	SeverityThresholds       SeverityThreshold `yaml:"severity_thresholds"`
+}
+
+type FilePair struct {
+	Category  string   `yaml:"category"`
+	BaseScore int      `yaml:"base_score"`
+	Patterns  []string `yaml:"patterns"`
+}
+
+type LineageModifier struct {
+	Comm     string `yaml:"program"`
+	Modifier int    `yaml:"modifier"`
+}
+
+type SeverityThreshold struct {
+	Medium int `yaml:"medium"`
+	High   int `yaml:"high"`
 }
 
 func LoadConfig(path string) (*Config, error) {

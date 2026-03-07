@@ -11,6 +11,7 @@ import (
 
 	"github.com/ItsMonish/barbwire/internal/config"
 	"github.com/ItsMonish/barbwire/internal/correlator"
+	"github.com/ItsMonish/barbwire/internal/types"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
@@ -82,7 +83,7 @@ func main() {
 			continue
 		}
 
-		var ev correlator.Event
+		var ev types.Event
 		err = binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &ev)
 		if err != nil {
 			log.Printf("Error parsing ring buffer record: %v", err)

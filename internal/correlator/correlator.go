@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math/bits"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ItsMonish/barbwire/internal/config"
+	"github.com/ItsMonish/barbwire/internal/scoring"
 	"github.com/ItsMonish/barbwire/internal/types"
 )
 
@@ -17,13 +19,16 @@ type Correlator struct {
 	recentOpens map[int32][]types.OpenEntry
 	lineage     map[int32]types.LineageEntry
 	window      time.Duration
+	scorer      *scoring.Scorer
 }
 
 func NewCorrelator(conf *config.Config) *Correlator {
+	s := scoring.NewScorer(conf)
 	c := &Correlator{
 		recentOpens: make(map[int32][]types.OpenEntry),
 		lineage:     make(map[int32]types.LineageEntry),
 		window:      time.Duration(conf.CorrelationWindowSeconds) * time.Second,
+		scorer:      s,
 	}
 
 	go c.cleanUp()
@@ -88,10 +93,17 @@ func (c *Correlator) handleConnect(ev types.Event) {
 		command := trimNull(ev.Command[:])
 		addr, port := resolvPort(ev)
 
+		scoreResult := c.scorer.ScoreEvent(open.Fname, &lineage)
+		if scoreResult.Score == 0 {
+			continue
+		}
+
 		fmt.Printf("\n┌─ barbwire alert — PID %-6d ─────────────\n", ev.Pid)
 		fmt.Printf("│  command  : %s\n", command)
 		fmt.Printf("│  file     : %s\n", open.Fname)
 		fmt.Printf("│  connect  : %s:%d\n", addr, port)
+		fmt.Printf("│  severity  : %s\n", scoreResult.Severity)
+		fmt.Printf("│  reasons  : %s\n", strings.Join(scoreResult.Reasons, ", "))
 
 		if hasLineage {
 			fmt.Printf("│  parent   : %s (pid %d)\n", lineage.ParentComm, lineage.Ppid)

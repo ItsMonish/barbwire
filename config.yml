@@ -1,2 +1,70 @@
 # The time difference between calls to consider for correlation in seconds
 window_duration: 5
+
+suspicious_files:
+  - category: "credential access"
+    base_score: 2
+    patterns:
+      - "/etc/passwd"
+      - "/etc/shadow"
+
+  - category: "ssh key exfiltration"
+    base_score: 3
+    patterns:
+      - ".ssh/id_rsa"
+      - ".ssh/id_ed25519"
+      - ".ssh/id_ecdsa"
+
+  - category: "ssh recon"
+    base_score: 1
+    patterns:
+      - ".ssh/known_hosts"
+      - ".ssh/authorized_keys"
+
+  - category: "dns recon"
+    base_score: 1
+    patterns:
+      - "/etc/resolv.conf"
+      - "/etc/hosts"
+      - "/etc/nsswitch.conf"
+
+  - category: "process memory access"
+    base_score: 2
+    patterns:
+      - "/proc/"
+
+  - category: "staging area"
+    base_score: 2
+    patterns:
+      - "/tmp/"
+      - "/dev/shm/"
+
+suspicious_parents:
+  - program: "bash"
+    modifier: 2
+  - program: "sh"
+    modifier: 2
+  - program: "zsh"
+    modifier: 2
+  - program: "fish"
+    modifier: 2
+  - program: "sshd"
+    modifier: 3
+  - program: "cron"
+    modifier: 2
+  - program: "python"
+    modifier: 1
+  - program: "python3"
+    modifier: 1
+
+legit_parents:
+  - program: "systemd"
+    modifier: -2
+  - program: "containerd"
+    modifier: -2
+  - program: "dockerd"
+    modifier: -2
+
+severity_thresholds:
+  medium: 2
+  high: 4
