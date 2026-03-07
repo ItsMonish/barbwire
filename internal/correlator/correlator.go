@@ -20,6 +20,7 @@ type Correlator struct {
 	lineage     map[int32]types.LineageEntry
 	window      time.Duration
 	scorer      *scoring.Scorer
+	threshold   int
 }
 
 func NewCorrelator(conf *config.Config) *Correlator {
@@ -29,6 +30,7 @@ func NewCorrelator(conf *config.Config) *Correlator {
 		lineage:     make(map[int32]types.LineageEntry),
 		window:      time.Duration(conf.CorrelationWindowSeconds) * time.Second,
 		scorer:      s,
+		threshold:   conf.AlertThreshold,
 	}
 
 	go c.cleanUp()
@@ -85,33 +87,44 @@ func (c *Correlator) handleConnect(ev types.Event) {
 	}
 
 	now := time.Now()
-	for _, open := range opens {
-		if now.Sub(open.Timestamp) < c.window {
+	var bestOpen *types.OpenEntry
+	var bestResult scoring.SeverityResult
+	for i, open := range opens {
+		if now.Sub(open.Timestamp) > c.window {
 			continue
 		}
 
-		command := trimNull(ev.Command[:])
-		addr, port := resolvPort(ev)
-
-		scoreResult := c.scorer.ScoreEvent(open.Fname, &lineage)
-		if scoreResult.Score == 0 {
-			continue
-		}
-
-		fmt.Printf("\n┌─ barbwire alert — PID %-6d ─────────────\n", ev.Pid)
-		fmt.Printf("│  command  : %s\n", command)
-		fmt.Printf("│  file     : %s\n", open.Fname)
-		fmt.Printf("│  connect  : %s:%d\n", addr, port)
-		fmt.Printf("│  severity  : %s\n", scoreResult.Severity)
-		fmt.Printf("│  reasons  : %s\n", strings.Join(scoreResult.Reasons, ", "))
-
+		var lin *types.LineageEntry
 		if hasLineage {
-			fmt.Printf("│  parent   : %s (pid %d)\n", lineage.ParentComm, lineage.Ppid)
-			fmt.Printf("│  gparent  : %s (pid %d)\n", lineage.GparentComm, lineage.Gppid)
+			lin = &lineage
 		}
 
-		fmt.Println("└─────────────────────────────────────────────")
+		result := c.scorer.ScoreEvent(open.Fname, lin)
+		if result.Score > bestResult.Score {
+			bestResult = result
+			bestOpen = &opens[i]
+		}
 	}
+
+	// nothing scored or below threshold
+	if bestOpen == nil || bestResult.Score < c.threshold {
+		return
+	}
+
+	command := trimNull(ev.Command[:])
+	addr, port := resolvPort(ev)
+
+	fmt.Printf("\n┌─ barbwire alert — PID %-6d ─────────────\n", ev.Pid)
+	fmt.Printf("│  command  : %s\n", command)
+	fmt.Printf("│  file     : %s\n", bestOpen.Fname)
+	fmt.Printf("│  connect  : %s:%d\n", addr, port)
+	fmt.Printf("│  severity : %s\n", bestResult.Severity)
+	fmt.Printf("│  reasons  : %s\n", strings.Join(bestResult.Reasons, ", "))
+	if hasLineage {
+		fmt.Printf("│  parent   : %s (pid %d)\n", lineage.ParentComm, lineage.Ppid)
+		fmt.Printf("│  gparent  : %s (pid %d)\n", lineage.GparentComm, lineage.Gppid)
+	}
+	fmt.Println("└─────────────────────────────────────────────")
 }
 
 func (c *Correlator) cleanUp() {

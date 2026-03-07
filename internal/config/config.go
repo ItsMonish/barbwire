@@ -12,6 +12,7 @@ type Config struct {
 	SuspiciousParents        []LineageModifier `yaml:"suspicious_parents"`
 	LegitParents             []LineageModifier `yaml:"legit_parents"`
 	SeverityThresholds       SeverityThreshold `yaml:"severity_thresholds"`
+	AlertThreshold           int               `yaml:"alert_threshold"`
 }
 
 type FilePair struct {

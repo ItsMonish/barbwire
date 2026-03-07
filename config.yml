@@ -3,7 +3,7 @@ window_duration: 5
 
 suspicious_files:
   - category: "credential access"
-    base_score: 2
+    base_score: 3
     patterns:
       - "/etc/passwd"
       - "/etc/shadow"
@@ -66,5 +66,7 @@ legit_parents:
     modifier: -2
 
 severity_thresholds:
-  medium: 2
-  high: 4
+  medium: 3
+  high: 5
+
+alert_threshold: 3
