@@ -45,7 +45,7 @@ static __always_inline void init_event(struct event *e, __u8 type) {
     e->tgid = (__u32)ids;
     e->type = type;
     e->timestamp = bpf_ktime_get_ns();
-    bpf_get_current_comm(&e->command, sizeof(ring_buffer));
+    bpf_get_current_comm(&e->command, sizeof(e->command));
 }
 
 SEC("tp/syscalls/sys_enter_openat")
@@ -55,7 +55,7 @@ int record_open(struct trace_event_raw_sys_enter *ctx) {
 
     init_event(e, EVENT_OPEN);
 
-    const char *filename = (const char*)&ctx->args[1];
+    const char *filename = (const char*)ctx->args[1];
     bpf_probe_read_user_str(e->fname, sizeof(e->fname), filename);
 
     bpf_ringbuf_submit(e, 0);

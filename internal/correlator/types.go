@@ -1,11 +1,16 @@
 package correlator
 
-import "golang.org/x/sys/unix"
+import (
+	"sync"
+	"time"
+
+	"golang.org/x/sys/unix"
+)
 
 const (
 	EventOpen    uint8 = 1
-	EventConnect uint8 = 2
-	EventExec    uint8 = 3
+	EventExec    uint8 = 2
+	EventConnect uint8 = 3
 
 	AF_INET  = unix.AF_INET
 	AF_INET6 = unix.AF_INET6
@@ -31,4 +36,23 @@ type Event struct {
 	Gppid          int32
 	ParentCommand  [32]byte
 	GParentCommand [32]byte
+}
+
+type OpenEntry struct {
+	timestamp time.Time
+	fname     string
+}
+
+type LineageEntry struct {
+	ppid        int32
+	gppid       int32
+	parentComm  string
+	gparentComm string
+}
+
+type Correlator struct {
+	mu          sync.Mutex
+	recentOpens map[int32][]OpenEntry
+	lineage     map[int32]LineageEntry
+	window      time.Duration
 }

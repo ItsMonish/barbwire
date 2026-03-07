@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/ItsMonish/barbwire/internal/config"
 	"github.com/ItsMonish/barbwire/internal/correlator"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
@@ -21,7 +22,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	conf, err := LoadConfig("config.yml")
+	conf, err := config.LoadConfig("config.yml")
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}
@@ -53,7 +54,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error attaching to exec: %v", err)
 	}
-	tpExec.Close()
+	defer tpExec.Close()
 
 	rbReader, err := ringbuf.NewReader(objs.RingBuffer)
 	if err != nil {
@@ -67,6 +68,8 @@ func main() {
 		<-stop
 		rbReader.Close()
 	}()
+
+	corr := correlator.NewCorrelator(conf)
 
 	for {
 		record, err := rbReader.Read()
@@ -85,5 +88,7 @@ func main() {
 			log.Printf("Error parsing ring buffer record: %v", err)
 			continue
 		}
+
+		corr.HandleEvent(ev)
 	}
 }
