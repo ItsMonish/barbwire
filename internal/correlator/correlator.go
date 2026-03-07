@@ -17,6 +17,7 @@ func NewCorrelator(conf *config.Config) *Correlator {
 		window:      time.Duration(conf.CorrelationWindowSeconds) * time.Second,
 	}
 
+	go c.cleanUp()
 	return c
 }
 
@@ -71,7 +72,6 @@ func (c *Correlator) handleConnect(ev Event) {
 
 	now := time.Now()
 	for _, open := range opens {
-		fmt.Printf("Looking at %d\n", ev.Pid)
 		if now.Sub(open.timestamp) < c.window {
 			continue
 		}
@@ -90,6 +90,32 @@ func (c *Correlator) handleConnect(ev Event) {
 		}
 
 		fmt.Println("└─────────────────────────────────────────────")
+	}
+}
+
+func (c *Correlator) cleanUp() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		c.mu.Lock()
+		now := time.Now()
+
+		for pid, opens := range c.recentOpens {
+			var freshEntries []OpenEntry
+			for _, open := range opens {
+				if now.Sub(open.timestamp) <= c.window {
+					freshEntries = append(freshEntries, open)
+				}
+			}
+			if len(freshEntries) != 0 {
+				c.recentOpens[pid] = freshEntries
+			} else {
+				delete(c.recentOpens, pid)
+			}
+		}
+
+		c.mu.Unlock()
 	}
 }
 
